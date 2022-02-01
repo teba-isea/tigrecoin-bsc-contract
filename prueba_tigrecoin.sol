@@ -49,6 +49,8 @@ interface IBEP20 {
 
 // Provides information about the current execution context
 contract Context {
+	uint public _totalSupply;
+
 	// Empty internal constructor, to prevent people from mistakenly deploying
 	// an instance of this contract, which should be used via inheritance
 	constructor () internal { }
@@ -79,7 +81,7 @@ library SafeMath {
 	function sub(uint256 a, uint256 b) internal pure returns (uint256) {
 		return sub(a, b, "SafeMath: subtraction overflow");
 	}
-
+	
 	// Returns the subtraction of two unsigned integers, reverting with custom message on
 	// overflow (when the result is negative)
 	function sub(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
@@ -157,8 +159,11 @@ contract Ownable is Context {
 	}
 }
 
-contract BlackList is Ownable {
-	uint public _totalSupply;
+contract BlackList is Ownable, Context {
+	
+	event AddedBlackList(address _user);
+	event RemovedBlackList(address _user);
+	event DestroyedBlackFunds(address _user, uint value);
 
 	// Getters to allow the same blacklist to be used also by other contracts
 	function getBlackListStatus(address _maker) external view returns (bool) {
@@ -187,11 +192,9 @@ contract BlackList is Ownable {
 		uint dirtyFunds = _balances[_blackListedUser];
 		_balances[_blackListedUser] = 0;
 		_totalSupply -= dirtyFunds;
-		DestroyedBlackFunds(_blackListedUser, dirtyFunds);
+		emit DestroyedBlackFunds(_blackListedUser, dirtyFunds);
 	}
 
-	event AddedBlackList(address _user);
-	event RemovedBlackList(address _user);
 
 }
 
@@ -256,7 +259,7 @@ contract Pausable is Ownable {
 	}
 }
 
-contract BEP20Token is Context, Ownable, BlackList, WhiteList {
+contract TIGRE is Context, Ownable, BlackList, WhiteList {
 	using SafeMath for uint;
 
 	// Get the balances
@@ -304,37 +307,27 @@ contract BEP20Token is Context, Ownable, BlackList, WhiteList {
 		return _totalSupply;
 	}
 
-	// Moves tokens `amount` from `sender` to `recipient`
-	function _transfer(address sender, address recipient, uint amount) internal {
-		require(sender != address(0), "BEP20: transfer from the zero address");
-		require(recipient != address(0), "BEP20: transfer to the zero address");
-
-		_balances[sender] = _balances[sender].sub(amount);
-		_balances[recipient] = _balances[recipient].add(amount);  
-		
-		emit Transfer(sender, recipient, amount);
-	}
-
+	
 	// See {BEP20-balanceOf}
 	function balanceOf(address account) external view returns (uint) {
 		return _balances[account];
 	}
-
+	
 	// See {BEP20-transfer}
 	// `recipient` cannot be the zero address
 	// the caller must have a balance of at least `amount`
 	function transfer(address recipient, uint amount) external whenNotPaused returns (bool) {
 		require(!isBlackListed[msg.sender]);
 		_transfer(_msgSender(), recipient, amount);
-
+		
 		return true;
 	}
-
+	
 	// See {BEP20-allowance}
 	function allowance(address owner, address spender) external view returns (uint) {
 		return _allowances[owner][spender];
 	}
-
+	
 	// See {BEP20-approve}
 	// `spender` cannot be the zero address
 	function approve(address spender, uint amount) external returns (bool) {
@@ -342,75 +335,88 @@ contract BEP20Token is Context, Ownable, BlackList, WhiteList {
 		
 		return true;
 	}
-
+	
 	// See {BEP20-transferFrom}
 	// `sender` and `recipient` cannot be the zero address
 	// `sender` must have a balance of at least `amount`
 	// the caller must have allowance for `sender`'s tokens of at least `amount`
 	function transferFrom(address sender, address recipient, uint amount) external returns (bool) {
 		require(!isBlackListed[sender]);
-
+		
 		_transfer(sender, recipient, amount);
-
+		
 		_approve(
 			sender,
 			_msgSender(),
 			_allowances[sender][_msgSender()].sub(amount, "BEP20: transfer amount exceeds allowance")
-		);
-
-		return true;
+			);
+			
+			return true;
 	}
+		
+		// Atomically increases the allowance granted to `spender` by the caller
+		// `spender` cannot be the zero address
+		function increaseAllowance(address spender, uint addedValue) public returns (bool) {
+			_approve(
+				_msgSender(),
+				spender,
+				_allowances[_msgSender()][spender].add(addedValue)
+				);
+				
+				return true;
+		}
+			
+		// Automatically decreases the allowance granted to `spender` by the caller
+		// `spender` cannot be the zero address
+		// `spender` must have allowance for the caller of at least `subtractedValue`
+		function decreaseAllowance(address spender, uint subtractedValue) public returns (bool) {
+			_approve(
+				_msgSender(),
+				spender,
+				_allowances[_msgSender()][spender].sub(subtractedValue, "BEP20: decreased allowance below zero")
+				);
+				
+				return true;
+		}
+				
+		// Creates `amount` tokens and assigns them to `msg.sender`, increasing the total supply
+		// `msg.sender` must be the token owner
+		function mint(uint amount) public onlyOwner returns (bool) {
+			_mint(_msgSender(), amount);
+			
+			return true;
+		}
 
-	// Atomically increases the allowance granted to `spender` by the caller
-	// `spender` cannot be the zero address
-	function increaseAllowance(address spender, uint addedValue) public returns (bool) {
-		_approve(
-			_msgSender(),
-			spender,
-			_allowances[_msgSender()][spender].add(addedValue)
-		);
 
-		return true;
-	}
+		// Moves tokens `amount` from `sender` to `recipient`
+		function _transfer(address sender, address recipient, uint amount) internal {
+			require(sender != address(0), "BEP20: transfer from the zero address");
+			require(recipient != address(0), "BEP20: transfer to the zero address");
+	
+			_balances[sender] = _balances[sender].sub(amount);
+			_balances[recipient] = _balances[recipient].add(amount);  
+			
+			emit Transfer(sender, recipient, amount);
+		}
 
-	// Automatically decreases the allowance granted to `spender` by the caller
-	// `spender` cannot be the zero address
-	// `spender` must have allowance for the caller of at least `subtractedValue`
-	function decreaseAllowance(address spender, uint subtractedValue) public returns (bool) {
-		_approve(
-			_msgSender(),
-			spender,
-			_allowances[_msgSender()][spender].sub(subtractedValue, "BEP20: decreased allowance below zero")
-		);
+		// Creates `amount` tokens and assigns them to `account`, increasing
+		// `to` cannot be the zero address
+		function _mint(address account, uint amount) internal {
+			require(account != address(0), "BEP20: mint to the zero address");
+			
+			_totalSupply = _totalSupply.add(amount);
+			_balances[account] = _balances[account].add(amount);
+			emit Transfer(address(0), account, amount);
+		}
 
-		return true;
-	}
-
-	// Creates `amount` tokens and assigns them to `msg.sender`, increasing the total supply
-	// `msg.sender` must be the token owner
-	function mint(uint amount) public onlyOwner returns (bool) {
-		_mint(_msgSender(), amount);
-
-		return true;
-	}
-
-	// Creates `amount` tokens and assigns them to `account`, increasing
-	// `to` cannot be the zero address
-	function _mint(address account, uint amount) internal {
-		require(account != address(0), "BEP20: mint to the zero address");
-
-		_totalSupply = _totalSupply.add(amount);
-		_balances[account] = _balances[account].add(amount);
-		emit Transfer(address(0), account, amount);
-	}
-
-	// Destroy `amount` tokens from `msg.sender`, reducing
-	// `msg.sender` must be the token owner
-	function burn(uint amount) public onlyOwner returns (bool) {
-		_burn(_msgSender(), amount);
-
-		return true;
-	}
+		
+		// Destroy `amount` tokens from `msg.sender`, reducing
+		// `msg.sender` must be the token owner
+		function burn(uint amount) public onlyOwner returns (bool) {
+			_burn(_msgSender(), amount);
+			
+			return true;
+		}
 
 	// Destroys `amount` tokens from `account`, reducing the total supply
 	// `account` cannot be the zero address
