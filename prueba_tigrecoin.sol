@@ -1,68 +1,50 @@
 pragma solidity ^0.5.16;
 
 interface IBEP20 {
-    // Returns the amount of tokens in existence
-    function totalSupply() external view returns (uint);
+	// Returns the amount of tokens in existence
+	function totalSupply() external view returns (uint);
 
-    // Returns the token decimals
-    function decimals() external view returns (uint);
+	// Returns the token decimals
+	function decimals() external view returns (uint);
 
-    // Returns the token symbol
-    function symbol() external view returns (string memory);
+	// Returns the token symbol
+	function symbol() external view returns (string memory);
 
-    // Returns the token name
-    function name() external view returns (string memory);
+	// Returns the token name
+	function name() external view returns (string memory);
 
-    // Returns the token owner
-    function getOwner() external view returns (address);
+	// Returns the token owner
+	function getOwner() external view returns (address);
 
-    // Returns the amount of tokens owned by `account`
-    function balanceOf(address account) external view returns (uint);
+	// Returns the amount of tokens owned by `account`
+	function balanceOf(address account) external view returns (uint);
 
-    // Moves `amount` tokens from the caller's account to `recipient`
-    function transfer(address recipient, uint amount) external returns (bool);
+	// Moves `amount` tokens from the caller's account to `recipient`
+	function transfer(address recipient, uint amount) external returns (bool);
 
-    /**
-     * Returns the remaining number of tokens that `spender` will be
-     * allowed to spend on behalf of `owner` through {transferFrom}. This is
-     * zero by default.
-     *
-     * This value changes when {approve} or {transferFrom} are called.
-     */
-    function allowance(address _owner, address spender) external view returns (uint);
+	/**
+	 * Returns the remaining number of tokens that `spender` will be
+	 * allowed to spend on behalf of `owner` through {transferFrom}. This is
+	 * zero by default.
+	 *
+	 * This value changes when {approve} or {transferFrom} are called.
+	 */
+	function allowance(address _owner, address spender) external view returns (uint);
 
-    /// Sets `amount` as the allowance of `spender` over the caller's tokens
-    function approve(address spender, uint amount) external returns (bool);
+	/// Sets `amount` as the allowance of `spender` over the caller's tokens
+	function approve(address spender, uint amount) external returns (bool);
 
-    // Moves `amount` tokens from `sender` to `recipient` using the allowance mechanism
-    function transferFrom(address sender, address recipient, uint amount) external returns (bool);
+	// Moves `amount` tokens from `sender` to `recipient` using the allowance mechanism
+	function transferFrom(address sender, address recipient, uint amount) external returns (bool);
 
-    /* EVENTS */
+	/* EVENTS */
 
-    // Emitted when `value` tokens are moved from one account (`from`) to another (`to`)
-    event Transfer(address indexed from, address indexed to, uint value);
+	// Emitted when `value` tokens are moved from one account (`from`) to another (`to`)
+	event Transfer(address indexed from, address indexed to, uint value);
 
-    // Emitted when the allowance of a `spender` for an `owner` is set by
-    // a call to {approve}. `value` is the new allowance
-    event Approval(address indexed owner, address indexed spender, uint value);
-}
-
-// Provides information about the current execution context
-contract Context {
-	uint public _totalSupply;
-
-	// Empty internal constructor, to prevent people from mistakenly deploying
-	// an instance of this contract, which should be used via inheritance
-	constructor () internal { }
-
-	function _msgSender() internal view returns (address payable) {
-		return msg.sender;
-	}
-
-	function _msgData() internal view returns (bytes memory) {
-		this;
-		return msg.data;
-	}
+	// Emitted when the allowance of a `spender` for an `owner` is set by
+	// a call to {approve}. `value` is the new allowance
+	event Approval(address indexed owner, address indexed spender, uint value);
 }
 
 // Wrappers over Solidity's arithmetic operations with added overflow checks
@@ -120,6 +102,24 @@ library SafeMath {
 	}
 }
 
+// Provides information about the current execution context
+contract Context {
+	uint public _totalSupply;
+
+	// Empty internal constructor, to prevent people from mistakenly deploying
+	// an instance of this contract, which should be used via inheritance
+	constructor () internal { }
+
+	function _msgSender() internal view returns (address payable) {
+		return msg.sender;
+	}
+
+	function _msgData() internal view returns (bytes memory) {
+		this;
+		return msg.data;
+	}
+}
+
 // Provides a basic access control mechanism, where there is an
 // owner that can be granted exclusive access to specific functions
 contract Ownable is Context {
@@ -150,7 +150,7 @@ contract Ownable is Context {
 	function transferOwnership(address newOwner) public onlyOwner {
 		_transferOwnership(newOwner);
 	}
-
+	
 	// Transfers ownership of the contract to a new account (`newOwner`)
 	function _transferOwnership(address newOwner) internal {
 		require(newOwner != address(0), "Ownable: new owner is the zero address");
@@ -159,7 +159,39 @@ contract Ownable is Context {
 	}
 }
 
-contract BlackList is Ownable, Context {
+contract BasicToken is Ownable {
+	using SafeMath for uint;
+	
+	// Get the balances
+	mapping (address => mapping (address => uint)) public _allowances;
+	mapping (address => uint) public _balances;
+
+	// See {BEP20-transfer}
+	// `recipient` cannot be the zero address
+	// the caller must have a balance of at least `amount`
+	function transfer(address recipient, uint amount) external whenNotPaused returns (bool) {
+		_transfer(_msgSender(), recipient, amount);
+		return true;
+	}
+
+	// Creates `amount` tokens and assigns them to `msg.sender`, increasing the total supply
+	// `msg.sender` must be the token owner
+	function mint(uint amount) public onlyOwner returns (bool) {
+		_mint(_msgSender(), amount);
+		return true;
+	}
+
+	// Destroy `amount` tokens from `msg.sender`, reducing
+	// `msg.sender` must be the token owner
+	function burn(uint amount) public onlyOwner returns (bool) {
+		_burn(_msgSender(), amount);
+		return true;
+	}
+}
+
+// Locks or unlocks funds from an account
+// Being on the blacklist does not allow transactions
+contract BlackList is BasicToken {
 	
 	event AddedBlackList(address _user);
 	event RemovedBlackList(address _user);
@@ -177,28 +209,35 @@ contract BlackList is Ownable, Context {
 
 	mapping (address => bool) public isBlackListed;
 	
+	// Adds an account to the blacklist
 	function addBlackList (address _evilUser) public onlyOwner {
 		isBlackListed[_evilUser] = true;
 		emit AddedBlackList(_evilUser);
 	}
 
+	// Removes an account from the blacklist
 	function removeBlackList (address _clearedUser) public onlyOwner {
 		isBlackListed[_clearedUser] = false;
 		emit RemovedBlackList(_clearedUser);
 	}
 
+	// Destroy funds of an account blacklisted
+	// Update the Total Supply
 	function destroyBlackFunds (address _blackListedUser) public onlyOwner {
-		require(isBlackListed[_blackListedUser]);
+		require(isBlackListed[_blackListedUser], "BlackList: account isn't blacklisted");
+
 		uint dirtyFunds = _balances[_blackListedUser];
 		_balances[_blackListedUser] = 0;
-		_totalSupply -= dirtyFunds;
+		_totalSupply = _totalSupply.sub(dirtyFunds);
 		emit DestroyedBlackFunds(_blackListedUser, dirtyFunds);
 	}
-
-
 }
 
-contract WhiteList is Ownable {
+// Being on the whitelist allows transactions without fees
+contract WhiteList is BasicToken {
+
+	event AddedWhiteList(address _user);
+	event RemovedWhiteList(address _user);
 
 	// Getters to allow the same Whitelist to be used also by other contracts
 	function getWhiteListStatus(address _maker) external view returns (bool) {
@@ -211,20 +250,18 @@ contract WhiteList is Ownable {
 	}
 
 	mapping (address => bool) public isWhiteListed;
-	
+
+	// Adds an account to the whitelist
 	function addWhiteList (address _user) public onlyOwner {
 		isWhiteListed[_user] = true;
 		emit AddedWhiteList(_user);
 	}
 
+	// Removes an account from the whitelist
 	function removeWhiteList (address _user) public onlyOwner {
 		isWhiteListed[_user] = false;
 		emit RemovedWhiteList(_user);
 	}
-
-	event AddedWhiteList(address _user);
-	event RemovedWhiteList(address _user);
-
 }
 
 // Allows to implement an emergency stop mechanism
@@ -236,13 +273,13 @@ contract Pausable is Ownable {
 
 	// Modifier to make a function callable only when the contract is not paused
 	modifier whenNotPaused() {
-		require(!paused);
+		require(!paused, "Pausable: contract is paused");
 		_;
 	}
 
 	// Modifier to make a function callable only when the contract is paused
 	modifier whenPaused() {
-		require(paused);
+		require(paused, "Pausable: contract isn't paused");
 		_;
 	}
 
@@ -259,12 +296,7 @@ contract Pausable is Ownable {
 	}
 }
 
-contract TIGRE is Context, Ownable, BlackList, WhiteList {
-	using SafeMath for uint;
-
-	// Get the balances
-	mapping (address => mapping (address => uint)) public _allowances;
-	mapping (address => uint) public _balances;
+contract TIGRE is BasicToken, BlackList, WhiteList, Pausable {
 
 	string public _name;
 	string public _symbol;
@@ -312,17 +344,7 @@ contract TIGRE is Context, Ownable, BlackList, WhiteList {
 	function balanceOf(address account) external view returns (uint) {
 		return _balances[account];
 	}
-	
-	// See {BEP20-transfer}
-	// `recipient` cannot be the zero address
-	// the caller must have a balance of at least `amount`
-	function transfer(address recipient, uint amount) external whenNotPaused returns (bool) {
-		require(!isBlackListed[msg.sender]);
-		_transfer(_msgSender(), recipient, amount);
-		
-		return true;
-	}
-	
+
 	// See {BEP20-allowance}
 	function allowance(address owner, address spender) external view returns (uint) {
 		return _allowances[owner][spender];
@@ -341,7 +363,7 @@ contract TIGRE is Context, Ownable, BlackList, WhiteList {
 	// `sender` must have a balance of at least `amount`
 	// the caller must have allowance for `sender`'s tokens of at least `amount`
 	function transferFrom(address sender, address recipient, uint amount) external returns (bool) {
-		require(!isBlackListed[sender]);
+		require(!isBlackListed[sender], "TIGRE: account is blacklisted");
 		
 		_transfer(sender, recipient, amount);
 		
@@ -353,90 +375,105 @@ contract TIGRE is Context, Ownable, BlackList, WhiteList {
 			
 			return true;
 	}
-		
-		// Atomically increases the allowance granted to `spender` by the caller
-		// `spender` cannot be the zero address
-		function increaseAllowance(address spender, uint addedValue) public returns (bool) {
-			_approve(
-				_msgSender(),
-				spender,
-				_allowances[_msgSender()][spender].add(addedValue)
-				);
-				
-				return true;
-		}
-			
-		// Automatically decreases the allowance granted to `spender` by the caller
-		// `spender` cannot be the zero address
-		// `spender` must have allowance for the caller of at least `subtractedValue`
-		function decreaseAllowance(address spender, uint subtractedValue) public returns (bool) {
-			_approve(
-				_msgSender(),
-				spender,
-				_allowances[_msgSender()][spender].sub(subtractedValue, "BEP20: decreased allowance below zero")
-				);
-				
-				return true;
-		}
-				
-		// Creates `amount` tokens and assigns them to `msg.sender`, increasing the total supply
-		// `msg.sender` must be the token owner
-		function mint(uint amount) public onlyOwner returns (bool) {
-			_mint(_msgSender(), amount);
+
+	// Atomically increases the allowance granted to `spender` by the caller
+	// `spender` cannot be the zero address
+	function increaseAllowance(address spender, uint addedValue) public returns (bool) {
+		_approve(
+			_msgSender(),
+			spender,
+			_allowances[_msgSender()][spender].add(addedValue)
+			);
 			
 			return true;
-		}
+	}
 
-
-		// Moves tokens `amount` from `sender` to `recipient`
-		function _transfer(address sender, address recipient, uint amount) internal {
-			require(sender != address(0), "BEP20: transfer from the zero address");
-			require(recipient != address(0), "BEP20: transfer to the zero address");
-	
-			_balances[sender] = _balances[sender].sub(amount);
-			_balances[recipient] = _balances[recipient].add(amount);  
-			
-			emit Transfer(sender, recipient, amount);
-		}
-
-		// Creates `amount` tokens and assigns them to `account`, increasing
-		// `to` cannot be the zero address
-		function _mint(address account, uint amount) internal {
-			require(account != address(0), "BEP20: mint to the zero address");
-			
-			_totalSupply = _totalSupply.add(amount);
-			_balances[account] = _balances[account].add(amount);
-			emit Transfer(address(0), account, amount);
-		}
-
-		
-		// Destroy `amount` tokens from `msg.sender`, reducing
-		// `msg.sender` must be the token owner
-		function burn(uint amount) public onlyOwner returns (bool) {
-			_burn(_msgSender(), amount);
+	// Automatically decreases the allowance granted to `spender` by the caller
+	// `spender` cannot be the zero address
+	// `spender` must have allowance for the caller of at least `subtractedValue`
+	function decreaseAllowance(address spender, uint subtractedValue) public returns (bool) {
+		_approve(
+			_msgSender(),
+			spender,
+			_allowances[_msgSender()][spender].sub(subtractedValue, "BEP20: decreased allowance below zero")
+			);
 			
 			return true;
-		}
-
-	// Destroys `amount` tokens from `account`, reducing the total supply
-	// `account` cannot be the zero address
-	// `account` must have at least `amount` tokens
-	function _burn(address account, uint amount) internal {
-		require(account != address(0), "BEP20: burn from the zero address");
-
-		_balances[account] = _balances[account].sub(amount, "BEP20: burn amount exceeds balance");
-		_totalSupply = _totalSupply.sub(amount);
-		emit Transfer(account, address(0), amount);
 	}
 
 	// Sets `amount` as the allowance of `spender` over the `owner`s tokens
 	// `owner` cannot be the zero address.
 	// `spender` cannot be the zero address.
 	function _approve(address owner, address spender, uint amount) internal {
-		require(owner != address(0), "BEP20: approve from the zero address");
-		require(spender != address(0), "BEP20: approve to the zero address");
+		require(owner != address(0), "TIGRE: approve from the zero address");
+		require(spender != address(0), "TIGRE: approve to the zero address");
 
 		_allowances[owner][spender] = amount;
 		emit Approval(owner, spender, amount);
+	}
+
+	// additional variables for use if transaction fees ever became necessary
+	uint public transferFee = 0;
+
+	// Moves tokens `amount` from `sender` to `recipient`
+	function _transfer(address sender, address recipient, uint amount) internal {
+		require(sender != recipient, "TIGRE: sender and recipient can't be the same address");
+		require(sender != address(0), "TIGRE: transfer from the zero address");
+		require(recipient != address(0), "TIGRE: transfer to the zero address");
+		require(!isBlackListed[msg.sender], "TIGRE: account is blacklisted");
+
+		if (amount < _totalSupply.div(200) || isWhiteListed(sender) || transferFee == 0) {
+			_balances[sender] = _balances[sender].sub(amount);
+			_balances[recipient] = _balances[recipient].add(amount);
+		} else {
+			uint toOwner = (amount.mul(transferFee)).div(100);
+			uint sendAmount = amount.sub(transferFee);
+
+			_balances[sender] = _balances[sender].sub(amount);
+			_balances[recipient] = _balances[recipient].add(sendAmount);
+
+			_balances[_owner] = _balances[_owner].add(toOwner);
+			emit Transfer(sender, _owner, toOwner);
+		}
+
+		emit Transfer(sender, recipient, amount);
+	}
+
+	// Creates `amount` tokens and assigns them to `account`, increasing
+	// `to` cannot be the zero address
+	function _mint(address account, uint amount) internal {
+		require(account != address(0), "TIGRE: mint to the zero address");
+		
+		_totalSupply = _totalSupply.add(amount);
+		_balances[account] = _balances[account].add(amount);
+		emit Transfer(address(0), account, amount);
+	}
+
+	// Destroys `amount` tokens from `account`, reducing the total supply
+	// `account` cannot be the zero address
+	// `account` must have at least `amount` tokens
+	function _burn(address account, uint amount) internal {
+		require(account != address(0), "TIGRE: burn from the zero address");
+	
+		_balances[account] = _balances[account].sub(amount, "TIGRE: burn amount exceeds balance");
+		_totalSupply = _totalSupply.sub(amount);
+		emit Transfer(account, address(0), amount);
+	}
+
+	// Only owner sets the fee value
+	function setParams(uint _transferFee) public onlyOwner returns (bool) {
+		_setParams(_transferFee);
+
+		return true;
+	}
+
+	function _setParams(uint _transferFee) internal {
+		require(_transferFee <= 20);
+
+		transferFee = _transferFee;
+	}
+
+	function showTransferFee() external view returns (uint) {
+		return transferFee;
 	}
 }
