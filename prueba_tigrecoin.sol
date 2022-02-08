@@ -314,6 +314,7 @@ contract TIGRE is BasicToken, BlackList, WhiteList, Pausable {
 		_symbol = tokenSymbol;
 		_decimals = decimalUnits;
 		_totalSupply = initialSupply * (10 ** _decimals);
+		_maxSupply = 100000000 * (10 ** _decimals);
 		_balances[msg.sender] = _totalSupply;
 
 		emit Transfer(address(0), msg.sender, _totalSupply);
@@ -443,6 +444,7 @@ contract TIGRE is BasicToken, BlackList, WhiteList, Pausable {
 	// `to` cannot be the zero address
 	function _mint(address account, uint amount) internal {
 		require(account != address(0), "TIGRE: mint to the zero address");
+		require(_totalSupply.add(amount) <= _maxSupply, "TIGRE: max supply can't be surpassed");
 		
 		_totalSupply = _totalSupply.add(amount);
 		_balances[account] = _balances[account].add(amount);
